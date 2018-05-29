@@ -6,6 +6,8 @@ TODO:
       - verbose output option
       - option to disable DNS resolution
       - ipv6 support
+      - randomize hosts/ports
+      - docstrings, pylint warnings, ...
       - do stuff to open ports? (like rdpfingerprint, telnetfp, ...)
       - progress report?
 """
@@ -24,9 +26,6 @@ OPEN_QUEUE = Queue()
 
 
 def validate_ip_address(ip_address):
-    """
-    PUT A DOCSTRING HERE
-    """
     try:
         socket.inet_aton(ip_address)
     except socket.error:
@@ -35,9 +34,6 @@ def validate_ip_address(ip_address):
 
 
 def scan_port(host, port, delay=1):
-    """
-    PUT A DOCSTRING HERE
-    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(delay)
     try:
@@ -51,9 +47,6 @@ def scan_port(host, port, delay=1):
 
 
 def thread_proc(x, queue):
-    """
-    PUT A DOCSTRING HERE
-    """
     while True:
         host, port = queue.get()
         # TODO output this if verbose
