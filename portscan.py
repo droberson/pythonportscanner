@@ -2,7 +2,6 @@
 
 """
 TODO:
-      - "fast" option to build portlist from /etc/services
       - verbose output option
       - option to disable DNS resolution
       - ipv6 support
@@ -13,6 +12,7 @@ TODO:
 """
 
 import os
+import sys
 import struct
 import string
 import socket
@@ -86,6 +86,30 @@ def build_portlist(portlist):
     return list()
 
 
+def build_portlist_from_services(protocol="all"):
+    valid_protocols = ["tcp", "udp"]
+
+    if protocol != "all" and protocol not in valid_protocols:
+        raise ValueError("Invalid protocol: %s" % protocol)
+
+    final = []
+
+    if sys.platform == "win32":
+        services_file = "C:\windows\system32\drivers\etc\services"
+    else:
+        services_file = "/etc/services"
+
+    with open(services_file) as services:
+        for line in services:
+            if line.startswith("#") or line.isspace():
+                continue
+            port, proto = line.split()[1].split("/")
+            if proto == protocol or protocol == "all":
+                final.append(int(port))
+
+    return list(set(final))
+
+
 def hostname_to_ip(hostname):
     try:
         resolved = socket.getaddrinfo(hostname, 0, 0, socket.SOCK_STREAM)
@@ -141,7 +165,7 @@ def build_iplist(iplist):
     return final
 
 
-if __name__ == "__main__":
+def main():
     description = "portscan.py by Daniel Roberson @dmfroberson"
     parser = argparse.ArgumentParser(description=description)
 
@@ -152,7 +176,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "ports",
         action = "store",
-        help = "port(s) to connect to. ex: 22, 1-1024, -")
+        help = "port(s) to connect to. ex: 22, 1-1024, -",
+        nargs = "?")
+    parser.add_argument(
+        "-F",
+        "--fast",
+        action = "store_true",
+        required = False)
     parser.add_argument(
         "-t",
         "--threads",
@@ -161,11 +191,25 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Build port list from supplied CLI args
-    ports = build_portlist(args.ports)
-    if not ports:
+    if not args.ports and not args.fast:
         parser.print_help()
-        print("[-] Invalid port range: %s" % args.ports)
+        print("[-] Must specify port range or use -F flag.")
         exit(os.EX_USAGE)
+
+    if args.ports and args.fast:
+        parser.print_help()
+        print("[-] Cannot use -F and specify a port range.")
+        exit(os.EX_USAGE)
+
+    if args.ports:
+        ports = build_portlist(args.ports)
+        if not ports:
+            parser.print_help()
+            print("[-] Invalid port range: %s" % args.ports)
+            exit(os.EX_USAGE)
+
+    if args.fast:
+        ports = build_portlist_from_services()
 
     # Build host list from supplied CLI args
     hosts = build_iplist(args.hosts)
@@ -197,3 +241,8 @@ if __name__ == "__main__":
         (total_scanned, total_hosts,OPEN_QUEUE.qsize()))
     while not OPEN_QUEUE.empty():
         print(OPEN_QUEUE.get())
+
+
+if __name__ == "__main__":
+    main()
+
