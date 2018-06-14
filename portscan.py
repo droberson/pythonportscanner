@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-"""
+""" portscan.py - by Daniel Roberson (@dmfroberson)
 TODO:
       - verbose output option
       - option to disable DNS resolution
       - ipv6 support
       - randomize hosts/ports
-      - docstrings, pylint warnings, ...
       - do stuff to open ports? (like rdpfingerprint, telnetfp, ...)
       - progress report?
 """
@@ -26,6 +25,15 @@ OPEN_QUEUE = Queue()
 
 
 def validate_ip_address(ip_address):
+    """ validate_ip_address() -- Validate an IP address.
+
+    Args:
+        ip_address (str) - IP address to validate.
+
+    Returns:
+        True if ip_address is valid.
+        False if ip_address is not valid.
+    """
     try:
         socket.inet_aton(ip_address)
     except socket.error:
@@ -34,6 +42,17 @@ def validate_ip_address(ip_address):
 
 
 def scan_port(host, port, delay=1):
+    """ scan_port() - Determine if a TCP port is open or not.
+
+    Args:
+        host (str) - Host to connect to.
+        port (int) - Port to connect to.
+        delay (int) - Timeout in seconds. Default = 1.
+
+    Returns:
+        True if port is open on host.
+        False if port is not open on host.
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(delay)
     try:
@@ -46,17 +65,35 @@ def scan_port(host, port, delay=1):
     return True
 
 
-def thread_proc(x, queue):
+def thread_proc(thread_id, queue):
+    """ thread_proc() - Thread handling process.
+
+    Args:
+        thread_id (int) - Thread number.
+        queue (Queue) - Queue of tasks.
+
+    Returns:
+        Nothing.
+    """
     while True:
         host, port = queue.get()
         # TODO output this if verbose
-        #print("Thread %d: %s:%s" % (x, host, str(port)))
+        #print("Thread %d: %s:%s" % (thread_id, host, str(port)))
         if scan_port(host, port):
             OPEN_QUEUE.put((host, port))
         queue.task_done()
 
 
 def valid_port(port):
+    """ valid_port() - Validate a port number.
+
+    Args:
+        port (int) - Port number to validate.
+
+    Returns:
+        True if port is a valid port number.
+        False if port is not a valid port number.
+    """
     try:
         if int(port) > 0 and int(port) < 65536:
             return True
@@ -66,6 +103,15 @@ def valid_port(port):
 
 
 def build_portlist(portlist):
+    """ build_portlist() - Build list of ports from Nmap syntax.
+
+    Args:
+        portlist (str) - Nmap notation port list. Ex: 1-1024,5555,8080
+
+    Returns:
+        Unique list of ports derived from portlist on success.
+        Empty list if portstring is invalid.
+    """
     final = []
     allowed = set(string.digits + "-,")
     if (set(portlist) <= allowed) is False:
@@ -87,15 +133,22 @@ def build_portlist(portlist):
 
 
 def build_portlist_from_services(protocol="all"):
-    valid_protocols = ["tcp", "udp"]
+    """ build_portlist_from_services() - Make a port list from the services file.
 
+    Args:
+        protocol (str) - "tcp", "udp", or "all". Default is "all"
+
+    Returns:
+        List of port numbers derived from /etc/services
+    """
+    valid_protocols = ["tcp", "udp"]
     if protocol != "all" and protocol not in valid_protocols:
         raise ValueError("Invalid protocol: %s" % protocol)
 
     final = []
 
     if sys.platform == "win32":
-        services_file = "C:\windows\system32\drivers\etc\services"
+        services_file = r"C:\windows\system32\drivers\etc\services"
     else:
         services_file = "/etc/services"
 
@@ -111,6 +164,14 @@ def build_portlist_from_services(protocol="all"):
 
 
 def hostname_to_ip(hostname):
+    """ hostname_to_ip() - Resolve a hostname, returning an IP address.
+
+    Args:
+        hostname (str) - Hostname to resolve.
+
+    Returns:
+        String containing IP address in dotted quad notation.
+    """
     try:
         resolved = socket.getaddrinfo(hostname, 0, 0, socket.SOCK_STREAM)
     except socket.gaierror:
@@ -119,6 +180,15 @@ def hostname_to_ip(hostname):
 
 
 def valid_ipv4_address(ip_address):
+    """ valid_ipv4_address() - Validate an IPv4 address.
+
+    Args:
+        ip_address (str) - IP address to verify.
+
+    Returns:
+        True if ip_address is a valid IPv4 address.
+        False if ip_address is not a valid IPv4 address.
+    """
     try:
         socket.inet_aton(ip_address)
     except socket.error:
@@ -127,16 +197,41 @@ def valid_ipv4_address(ip_address):
 
 
 def ip_to_long(ip_address):
+    """ ip_to_long() - Concert IP address to decimal.
+
+    Args:
+        ip_address (str) - IP address in dotted quad notation.
+
+    Returns:
+        Decimal representation of ip_address.
+    """
     tmp = socket.inet_aton(ip_address)
     return struct.unpack("!L", tmp)[0]
 
 
 def long_to_ip(ip_address):
+    """ long_to_ip() - Convert decimal number to IP address.
+
+    Args:
+        ip_address (int) - Number representing an IP address.
+
+    Returns:
+        String containing IP address in dotted quad notation.
+    """
     tmp = struct.pack("!L", ip_address)
     return socket.inet_ntoa(tmp)
 
 
 def build_iplist(iplist):
+    """ build_iplist() - Build list of IP addresses from CIDR network notation.
+
+    Args:
+        iplist (str) - CIDR notation network. Ex: 192.168.0.0/24
+
+    Returns:
+        A list of IPs on success.
+        An empty list on failure.
+    """
     final = []
     if "/" in iplist:
         network, cidrmask = iplist.split("/")
@@ -166,28 +261,36 @@ def build_iplist(iplist):
 
 
 def main():
+    """ main() - Handle CLI arguments and execute a port scan.
+
+    Args:
+        None.
+
+    Returns:
+        Nothing.
+    """
     description = "portscan.py by Daniel Roberson @dmfroberson"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument(
         "hosts",
-        action = "store",
-        help = "host(s) to connect to. ex: 127.0.0.1, 10.0.0.0/8, ...")
+        action="store",
+        help="host(s) to connect to. ex: 127.0.0.1, 10.0.0.0/8, ...")
     parser.add_argument(
         "ports",
-        action = "store",
-        help = "port(s) to connect to. ex: 22, 1-1024, -",
-        nargs = "?")
+        action="store",
+        help="port(s) to connect to. ex: 22, 1-1024, -",
+        nargs="?")
     parser.add_argument(
         "-F",
         "--fast",
-        action = "store_true",
-        required = False)
+        action="store_true",
+        required=False)
     parser.add_argument(
         "-t",
         "--threads",
-        required = False,
-        default = 8)
+        required=False,
+        default=8)
     args = parser.parse_args()
 
     # Build port list from supplied CLI args
@@ -238,7 +341,7 @@ def main():
 
     # Report
     print("Scanned %d ports on %d hosts. %d open" % \
-        (total_scanned, total_hosts,OPEN_QUEUE.qsize()))
+        (total_scanned, total_hosts, OPEN_QUEUE.qsize()))
     while not OPEN_QUEUE.empty():
         print(OPEN_QUEUE.get())
 
