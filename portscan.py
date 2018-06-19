@@ -8,6 +8,12 @@ TODO:
       - randomize hosts/ports
       - do stuff to open ports? (like rdpfingerprint, telnetfp, ...)
       - progress report?
+      - ability to scan slower than full throttle.
+      - output strategies:
+        - plain text/stdout
+        - plain text to a logfile
+        - CSV
+      - if port is set to "all", do 1-65535
 """
 
 import os
@@ -227,6 +233,7 @@ def build_iplist(iplist):
 
     Args:
         iplist (str) - CIDR notation network. Ex: 192.168.0.0/24
+                     - Note: this will also take single IP addresses.
 
     Returns:
         A list of IPs on success.
@@ -260,6 +267,38 @@ def build_iplist(iplist):
     return final
 
 
+def parse_blacklist(filename):
+    """ parse_blacklist() - Parse blacklist file.
+
+    Args:
+        filename (str) - Path to blacklist.
+
+    Returns:
+        Unique list of IP addresses on success.
+        Exits with EX_USAGE if blacklist cannot be read.
+
+    Example blacklist file:
+
+        # This is a comment
+        10.10.10.10
+        192.168.0.0/24
+    """
+    final = []
+    try:
+        with open(filename, "r") as blacklist:
+            for line in blacklist:
+                if line.isspace() or line.startswith("#"):
+                    continue
+                final += build_iplist(line.rstrip())
+    except FileNotFoundError as exc:
+        print("[-] Unable to open blacklist %s: %s" % (filename, exc))
+        exit(os.EX_USAGE)
+    except PermissionError as exc:
+        print("[-] Unable to open blacklist %s: %s" % (filename, exc))
+        exit(os.EX_USAGE)
+    return list(set(final))
+
+
 def main():
     """ main() - Handle CLI arguments and execute a port scan.
 
@@ -289,8 +328,14 @@ def main():
     parser.add_argument(
         "-t",
         "--threads",
+        help="number of threads to use during scanning.",
         required=False,
         default=8)
+    parser.add_argument(
+        "-b",
+        "--blacklist",
+        help="file containing off-limits IP addresses or CIDR ranges",
+        required=False)
     args = parser.parse_args()
 
     # Build port list from supplied CLI args
@@ -314,13 +359,19 @@ def main():
     if args.fast:
         ports = build_portlist_from_services()
 
-    # Build host list from supplied CLI args
+    # Build host list from supplied CLI args, accounting for blacklist.
     hosts = build_iplist(args.hosts)
     if not hosts:
         parser.print_help()
         print("[-] Invalid host(s): %s" % args.hosts)
         exit(os.EX_USAGE)
 
+    blacklist = []
+    if args.blacklist:
+        blacklist = parse_blacklist(args.blacklist)
+    hosts = [host for host in hosts if not in blacklist]
+
+    # Add scan targets to the queue.
     # TODO: option to shuffle this
     for host in hosts:
         for port in ports:
