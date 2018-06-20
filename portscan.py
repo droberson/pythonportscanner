@@ -407,11 +407,11 @@ def main():
     total_scanned = IP_QUEUE.qsize()
 
     print("Scanning %d %s on %d %s using %d threads..." %
-        (total_ports,
-         "port" if total_ports == 1 else "ports",
-         total_hosts,
-         "host" if total_hosts == 1 else "hosts",
-         int(args.threads)))
+          (total_ports,
+           "port" if total_ports == 1 else "ports",
+           total_hosts,
+           "host" if total_hosts == 1 else "hosts",
+           int(args.threads)))
 
     # Start worker threads
     for thread in range(int(args.threads)):
