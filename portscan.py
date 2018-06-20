@@ -2,7 +2,7 @@
 
 """ portscan.py - by Daniel Roberson (@dmfroberson)
 TODO:
-      - verbose output option
+      - Settings object instead of global variables.
       - option to disable DNS resolution
       - ipv6 support
       - randomize hosts/ports
@@ -28,6 +28,20 @@ from queue import Queue
 
 IP_QUEUE = Queue()
 OPEN_QUEUE = Queue()
+VERBOSE = False
+
+
+def vprint(message):
+    """ vprint() -- Print verbose messages to stderr if verbosity is desired.
+
+    Args:
+        message (str) - Message to output.
+
+    Returns:
+        Nothing.
+    """
+    if VERBOSE:
+        print(message, file=sys.stderr)
 
 
 def validate_ip_address(ip_address):
@@ -64,8 +78,9 @@ def scan_port(host, port, delay=1):
     try:
         sock.connect((host, port))
     except Exception as exc:
-        # TODO output exception info if verbose
+        vprint(" [-] %s:%d - %s" % (host, port, exc))
         return False
+    vprint(" [+] %s:%d is open." % (host, port))
     # TODO run secondary scanning methods against open sockets
     sock.close()
     return True
@@ -83,8 +98,7 @@ def thread_proc(thread_id, queue):
     """
     while True:
         host, port = queue.get()
-        # TODO output this if verbose
-        #print("Thread %d: %s:%s" % (thread_id, host, str(port)))
+        vprint("[+] Thread %d: %s:%s" % (thread_id, host, str(port)))
         if scan_port(host, port):
             OPEN_QUEUE.put((host, port))
         queue.task_done()
@@ -336,7 +350,18 @@ def main():
         "--blacklist",
         help="file containing off-limits IP addresses or CIDR ranges",
         required=False)
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="toggle verbosity",
+        action="store_true",
+        required=False)
     args = parser.parse_args()
+
+    # Configure verbosity
+    global VERBOSE
+    if args.verbose:
+        VERBOSE = True
 
     # Build port list from supplied CLI args
     if not args.ports and not args.fast:
@@ -369,7 +394,7 @@ def main():
     blacklist = []
     if args.blacklist:
         blacklist = parse_blacklist(args.blacklist)
-    hosts = [host for host in hosts if not in blacklist]
+    hosts = [host for host in hosts if host not in blacklist]
 
     # Add scan targets to the queue.
     # TODO: option to shuffle this
@@ -380,6 +405,13 @@ def main():
     total_hosts = len(hosts)
     total_ports = len(ports)
     total_scanned = IP_QUEUE.qsize()
+
+    print("Scanning %d %s on %d %s using %d threads..." %
+        (total_ports,
+         "port" if total_ports == 1 else "ports",
+         total_hosts,
+         "host" if total_hosts == 1 else "hosts",
+         int(args.threads)))
 
     # Start worker threads
     for thread in range(int(args.threads)):
