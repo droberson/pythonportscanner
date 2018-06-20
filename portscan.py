@@ -6,7 +6,6 @@ TODO:
       - option to disable DNS resolution
       - ipv6 support
       - randomize hosts/ports
-      - do stuff to open ports? (like rdpfingerprint, telnetfp, ...)
       - progress report?
       - ability to scan slower than full throttle.
       - output strategies:
@@ -25,6 +24,8 @@ import argparse
 from threading import Thread
 from queue import Queue
 
+# Secondary scanning modules!
+from secondary_scans import *
 
 IP_QUEUE = Queue()
 OPEN_QUEUE = Queue()
@@ -81,8 +82,16 @@ def scan_port(host, port, delay=1):
         vprint(" [-] %s:%d - %s" % (host, port, exc))
         return False
     vprint(" [+] %s:%d is open." % (host, port))
-    # TODO run secondary scanning methods against open sockets
+
     sock.close()
+
+    # TODO re-work this to pass the open socket rather than opening new ones
+    # within the scan methods?
+    # Run secondary scanning methods against open sockets.
+    scanners = [scanner for scanner in SCANNERS if scanner[0] == port]
+    for scanner in scanners:
+        scanner[1](host, port)
+
     return True
 
 
@@ -98,7 +107,7 @@ def thread_proc(thread_id, queue):
     """
     while True:
         host, port = queue.get()
-        vprint("[+] Thread %d: %s:%s" % (thread_id, host, str(port)))
+        vprint("[*] Scanning %s:%s on thread %d" % (host, str(port), thread_id))
         if scan_port(host, port):
             OPEN_QUEUE.put((host, port))
         queue.task_done()
@@ -406,12 +415,13 @@ def main():
     total_ports = len(ports)
     total_scanned = IP_QUEUE.qsize()
 
-    print("Scanning %d %s on %d %s using %d threads..." %
+    print("Scanning %d %s on %d %s using %d %s..." %
           (total_ports,
            "port" if total_ports == 1 else "ports",
            total_hosts,
            "host" if total_hosts == 1 else "hosts",
-           int(args.threads)))
+           int(args.threads),
+           "thread" if int(args.threads) == 1 else "threads"))
 
     # Start worker threads
     for thread in range(int(args.threads)):
