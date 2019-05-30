@@ -344,6 +344,11 @@ def main():
         help="port(s) to connect to. ex: 22, 1-1024, -",
         nargs="?")
     parser.add_argument(
+        "-c",
+        "--continuous",
+        action="store_true",
+        required=False)
+    parser.add_argument(
         "-F",
         "--fast",
         action="store_true",
@@ -429,14 +434,23 @@ def main():
         worker.setDaemon(True)
         worker.start()
 
-    # Wait for queue
-    IP_QUEUE.join()
+    # If continuous mode is set, scan same ranges repeatedly.
+    if args.continuous:
+        original = Queue()
+        for member in IP_QUEUE.queue:
+            original.put(member)
+        while True:
+            IP_QUEUE.join()
+            for member in original.queue:
+                IP_QUEUE.put(member)
+    else:
+        IP_QUEUE.join()
 
-    # Report
-    print("Scanned %d ports on %d hosts. %d open" % \
-        (total_scanned, total_hosts, OPEN_QUEUE.qsize()))
-    while not OPEN_QUEUE.empty():
-        print(OPEN_QUEUE.get())
+        # Report
+        print("Scanned %d ports on %d hosts. %d open" % \
+            (total_scanned, total_hosts, OPEN_QUEUE.qsize()))
+        while not OPEN_QUEUE.empty():
+            print(OPEN_QUEUE.get())
 
 
 if __name__ == "__main__":
